@@ -1,0 +1,125 @@
+<!interactive html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Mapbox Midterm - THE FINAL VERSION</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .filter-container {
+            position: absolute; top: 10px; left: 10px; z-index: 1;
+            background: white; padding: 10px; border-radius: 5px; font-family: sans-serif;
+        }
+        .filter-group { margin-bottom: 10px; }
+        .filter-group label { display: block; font-weight: bold; }
+        .mapboxgl-popup-content img { max-width: 200px; height: auto; display: block; margin-top: 5px; }
+        .mapboxgl-popup-content h4 { margin: 0 0 5px 0; font-size: 1.1em; }
+    </style>
+</head>
+<body>
+
+<div id="filter-container" class="filter-container">
+    <h3>Restaurant Filters</h3>
+    <div class="filter-group"><label for="price-filter">Price</label><select id="price-filter"><option value="all">All</option><option value="$">$</option><option value="$$">$$</option><option value="$$$">$$$</option></select></div>
+    <div class="filter-group"><label for="rating-filter">Minimum Rating</label><select id="rating-filter"><option value="all">All</option><option value="5">★★★★★</option><option value="4">★★★★☆ & Up</option><option value="3">★★★☆☆ & Up</option><option value="2">★★☆☆☆ & Up</option><option value="1">★☆☆☆☆ & Up</option></select></div>
+    <div class="filter-group"><input type="checkbox" id="meatball-filter"><label for="meatball-filter">Serves Meatball Subs</label></div>
+    <div class="filter-group"><input type="checkbox" id="vegetarian-filter"><label for="vegetarian-filter">Has Vegetarian Options</label></div>
+    <div class="filter-group"><label for="time-slider">Open at: <span id="time-label">12:00 PM</span></label><input id="time-slider" type="range" min="0" max="23" step="1" value="12"></div>
+</div>
+
+<div id="map"></div>
+
+<script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoibGFyaXN0YTIiLCJhIjoiY21sc2tocjZoMDc1eDNsb2o2cnVsbzd2cSJ9.W8g45yCe-Os-EiVMzQIN8A';
+
+    var map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/larista2/cmm2axar8007501suceyv0360',
+        center: [-104.8, 38.88],
+        zoom: 11
+    });
+
+    map.on('load', function() {
+        map.addSource('deli_data', {
+            type: 'vector',
+            url: 'mapbox://larista2.5bgoallu' 
+        });
+
+        const locationLayerId = 'deli-locations'; 
+    
+        const sourceLayerName = 'Sandwhich-delis-dmjti8';
+
+        map.addLayer({
+            'id': locationLayerId, 'type': 'symbol', 'source': 'deli_data', 'source-layer': sourceLayerName,
+            'layout': {
+                'icon-image': 'restaurant-15',
+                'icon-size': 1.5,
+                'icon-allow-overlap': true,
+                'text-field': ['get', 'Name'],
+                'text-size': 10,
+                'text-offset': [0, 1.25],
+                'text-anchor': 'top'
+            },
+            'paint': { 'text-color': '#000000', 'text-halo-color': '#FFFFFF', 'text-halo-width': 1 }
+        });
+        
+        const priceFilter = document.getElementById('price-filter');
+        const ratingFilter = document.getElementById('rating-filter');
+        const meatballFilter = document.getElementById('meatball-filter');
+        const vegetarianFilter = document.getElementById('vegetarian-filter');
+        const timeSlider = document.getElementById('time-slider');
+        const timeLabel = document.getElementById('time-label');
+
+        function applyFilters() {
+            const filters = ['all'];
+            const price = priceFilter.value;
+            if (price !== 'all') { filters.push(['==', ['get', 'Price_Category'], price]); }
+            const rating = ratingFilter.value;
+            if (rating !== 'all') { filters.push(['>=', ['get', 'Rating'], parseFloat(rating)]); }
+            if (meatballFilter.checked) { filters.push(['==', ['get', 'Meatball_Sub'], 'Yes']); }
+            if (vegetarianFilter.checked) { filters.push(['==', ['get', 'Vegetarian_Options'], 'Yes']); }
+            
+
+            const selectedTime = parseInt(timeSlider.value) * 100;
+            filters.push(['<=', ['get', 'Open_Time'], selectedTime]);
+            filters.push(['>=', ['get', 'Close_Time'], selectedTime]);
+            
+            map.setFilter(locationLayerId, filters);
+        }
+
+        priceFilter.addEventListener('change', applyFilters);
+        ratingFilter.addEventListener('change', applyFilters);
+        meatballFilter.addEventListener('change', applyFilters);
+        vegetarianFilter.addEventListener('change', applyFilters);
+        timeSlider.addEventListener('input', function(e) {
+            const hour = parseInt(e.target.value);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 ? hour % 12 : 12;
+            timeLabel.textContent = `${displayHour}:00 ${ampm}`;
+            applyFilters();
+        });
+
+        map.on('click', locationLayerId, function(e) {
+            var properties = e.features[0].properties;
+            var coordinates = e.features[0].geometry.coordinates.slice();
+            var popupHTML = `
+                <h4>${properties.Name}</h4>
+                <strong>Rating:</strong> ${properties.Rating} ★<br>
+                <strong>Meatball Price:</strong> ${properties.Meatball_Price} $<br>
+                
+            `;
+            new mapboxgl.Popup().setLngLat(coordinates).setHTML(popupHTML).addTo(map);
+        });
+
+        map.on('mouseenter', locationLayerId, function() { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', locationLayerId, function() { map.getCanvas().style.cursor = ''; });
+        
+        applyFilters();
+    });
+</script>
+
+</body>
+</html>
